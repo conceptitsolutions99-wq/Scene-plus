@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Sign in — Partner & Agent Offers Portal</title>
+<link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div class="login-wrap">
+    <div class="login-card">
+      <div class="brand" style="flex-direction:column; align-items:center; text-align:center; gap:6px;">
+        <img src="/img/scene-logo.jpg" alt="Scene+" style="width:120px; border-radius:10px;" />
+        <div class="brand-name" style="margin-top:6px;">Partner &amp; Agent Offers Portal</div>
+      </div>
+
+      <div id="errorBox"></div>
+
+      <form id="loginForm">
+        <div class="field">
+          <label for="username">Username</label>
+          <input id="username" name="username" autocomplete="username" required />
+        </div>
+        <div class="field">
+          <label for="password">Password</label>
+          <input id="password" name="password" type="password" autocomplete="current-password" required />
+        </div>
+        <button class="btn btn-block" type="submit" id="loginBtn">Sign in</button>
+      </form>
+
+      <div style="text-align:center; margin-top:14px;">
+        <a href="#" id="forgotPasswordLink" style="font-size:13px; color:var(--gold);">Forgot password?</a>
+      </div>
+    </div>
+  </div>
+
+  <div id="modalRoot"></div>
+  <div id="toastRoot"></div>
+
+<script>
+const form = document.getElementById('loginForm');
+const errorBox = document.getElementById('errorBox');
+const btn = document.getElementById('loginBtn');
+
+// If already signed in, skip straight to the app.
+if (localStorage.getItem('sp_token')) {
+  window.location.href = '/app.html';
+}
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  errorBox.innerHTML = '';
+  btn.disabled = true;
+  btn.textContent = 'Signing in…';
+  try {
+    const res = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: document.getElementById('username').value,
+        password: document.getElementById('password').value
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Sign in failed');
+    localStorage.setItem('sp_token', data.token);
+    localStorage.setItem('sp_user', JSON.stringify(data.user));
+    window.location.href = '/app.html';
+  } catch (err) {
+    errorBox.innerHTML = `<div class="error-msg">${err.message}</div>`;
+    btn.disabled = false;
+    btn.textContent = 'Sign in';
+  }
+});
+
+// -----------------------------------------------------------------------
+// Forgot password — email OTP flow
+// -----------------------------------------------------------------------
+
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function showModal(html) {
+  const root = document.getElementById('modalRoot');
+  root.innerHTML = `<div class="modal-backdrop"><div class="modal">${html}</div></div>`;
+  root.querySelectorAll('[data-close]').forEach(el => el.addEventListener('click', closeModal));
+  root.querySelector('.modal-backdrop').addEventListener('click', (e) => {
+    if (e.target.classList.contains('modal-backdrop')) closeModal();
+  });
+}
+function closeModal() { document.getElementById('modalRoot').innerHTML = ''; }
+function toast(msg, type = 'success') {
+  const root = document.getElementById('toastRoot');
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.textContent = msg;
+  root.appendChild(el);
+  setTimeout(() => el.remove(), 3200);
+}
+async function callApi(path, body) {
+  const res = await fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Something went wrong');
+  return data;
+}
+
+let resetUsername = '';
+let resetToken = '';
+
+document.getElementById('forgotPasswordLink').addEventListener('click', (e) => {
+  e.preventDefault();
+  showRequestStep();
+});
+
+function showRequestStep() {
+  resetUsername = '';
+  resetToken = '';
+  showModal(`
+    <h3>Reset your password</h3>
+    <p style="color:var(--text-dim); font-size:13px;">Enter your username (your email address). We'll send a 6-digit code that's valid for 15 minutes.</p>
+    <div id="fp_error"></div>
+    <div class="field"><label>Username</label><input id="fp_username" type="text" autocomplete="username" placeholder="you@example.com" /></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" data-close>Cancel</button>
+      <button class="btn" id="fp_sendBtn">Send code</button>
+    </div>
+  `);
+  document.getElementById('fp_sendBtn').addEventListener('click', async () => {
+    const username = document.getElementById('fp_username').value.trim();
+    const errBox = document.getElementById('fp_error');
+    errBox.innerHTML = '';
+    if (!username) { errBox.innerHTML = `<div class="error-msg">Enter your username</div>`; return; }
+    try {
+      const data = await callApi('/api/password-reset/request', { username });
+      resetUsername = username;
+      toast(data.devMode ? 'Code generated — check the server console (no email configured yet)' : 'Code sent — check your email');
+      showVerifyStep();
+    } catch (err) {
+      errBox.innerHTML = `<div class="error-msg">${err.message}</div>`;
+    }
+  });
+}
+
+function showVerifyStep() {
+  showModal(`
+    <h3>Enter your code</h3>
+    <p style="color:var(--text-dim); font-size:13px;">We sent a 6-digit code to <b>${escapeHtml(resetUsername)}</b>. It's valid for 15 minutes.</p>
+    <div id="fp_error"></div>
+    <div class="field"><label>6-digit code</label><input id="fp_otp" type="text" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="123456" /></div>
+    <div class="modal-actions" style="justify-content:space-between;">
+      <button class="btn btn-secondary" id="fp_resendBtn">Resend code</button>
+      <div style="display:flex; gap:8px;">
+        <button class="btn btn-secondary" data-close>Cancel</button>
+        <button class="btn" id="fp_verifyBtn">Verify</button>
+      </div>
+    </div>
+  `);
+
+  document.getElementById('fp_verifyBtn').addEventListener('click', async () => {
+    const otpValue = document.getElementById('fp_otp').value.trim();
+    const errBox = document.getElementById('fp_error');
+    errBox.innerHTML = '';
+    if (!otpValue) { errBox.innerHTML = `<div class="error-msg">Enter the code</div>`; return; }
+    try {
+      const data = await callApi('/api/password-reset/verify', { username: resetUsername, otp: otpValue });
+      resetToken = data.resetToken;
+      toast('Code verified');
+      showResetStep();
+    } catch (err) {
+      // "OTP not verified" case — show the error inline and let them retry or resend.
+      errBox.innerHTML = `<div class="error-msg">${err.message}</div>`;
+    }
+  });
+
+  document.getElementById('fp_resendBtn').addEventListener('click', async () => {
+    const errBox = document.getElementById('fp_error');
+    errBox.innerHTML = '';
+    try {
+      const data = await callApi('/api/password-reset/resend', { username: resetUsername });
+      toast(data.devMode ? 'New code generated — check the server console' : 'New code sent');
+    } catch (err) {
+      errBox.innerHTML = `<div class="error-msg">${err.message}</div>`;
+    }
+  });
+}
+
+function showResetStep() {
+  showModal(`
+    <h3>Set a new password</h3>
+    <div id="fp_error"></div>
+    <div class="field"><label>New password</label><input id="fp_new" type="password" autocomplete="new-password" /></div>
+    <div class="field"><label>Confirm new password</label><input id="fp_confirm" type="password" autocomplete="new-password" /></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" data-close>Cancel</button>
+      <button class="btn" id="fp_resetBtn">Reset password</button>
+    </div>
+  `);
+  document.getElementById('fp_resetBtn').addEventListener('click', async () => {
+    const newPassword = document.getElementById('fp_new').value;
+    const confirmPassword = document.getElementById('fp_confirm').value;
+    const errBox = document.getElementById('fp_error');
+    errBox.innerHTML = '';
+    if (!newPassword || newPassword.length < 8) { errBox.innerHTML = `<div class="error-msg">Password must be at least 8 characters</div>`; return; }
+    if (newPassword !== confirmPassword) { errBox.innerHTML = `<div class="error-msg">Passwords do not match</div>`; return; }
+    try {
+      await callApi('/api/password-reset/complete', { username: resetUsername, resetToken, newPassword });
+      closeModal();
+      toast('Password reset — sign in with your new password');
+    } catch (err) {
+      errBox.innerHTML = `<div class="error-msg">${err.message}</div>`;
+    }
+  });
+}
+</script>
+</body>
+</html>

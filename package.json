@@ -1,0 +1,14 @@
+{
+  "name": "scene-plus-offers-portal",
+  "version": "1.0.0",
+  "description": "Internal Partner & Agent Offers Portal prototype — offer management for partners, view-only access for customer service agents, and missing-points request tracking.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {}
+}
