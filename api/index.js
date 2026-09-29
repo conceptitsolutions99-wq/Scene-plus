@@ -582,7 +582,5 @@ const server = http.createServer(async (req, res) => {
   serveStatic(req, res, pathname);
 });
 
-server.listen(PORT, () => {
-  db.load(); // seed on first boot
-  console.log(`Scene+ Partner & Agent Offers Portal running at http://localhost:${PORT}`);
 });
+module.exports = server;
