@@ -553,7 +553,7 @@ function serveStatic(req, res, pathname) {
 // server
 // ---------------------------------------------------------------------------
 
-const server = http.createServer(async (req, res) => {
+async function handleRequest(req, res) {
   const parsed = url.parse(req.url, true);
   const pathname = parsed.pathname;
 
@@ -580,9 +580,16 @@ const server = http.createServer(async (req, res) => {
   }
 
   serveStatic(req, res, pathname);
-});
+}
 
-server.listen(PORT, () => {
-  db.load(); // seed on first boot
-  console.log(`Scene+ Partner & Agent Offers Portal running at http://localhost:${PORT}`);
-});
+const server = http.createServer(handleRequest);
+
+// Only start listening when run directly (not required as a module, e.g. on Vercel)
+if (require.main === module) {
+  server.listen(PORT, () => {
+    db.load(); // seed on first boot
+    console.log(`Scene+ Partner & Agent Offers Portal running at http://localhost:${PORT}`);
+  });
+}
+
+module.exports = handleRequest;

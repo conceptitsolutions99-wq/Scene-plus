@@ -8,10 +8,10 @@ const fs = require('fs');
 const path = require('path');
 const url = require('url');
 
-const db = require('./lib/db');
-const sessions = require('./lib/sessions');
-const otp = require('./lib/otp');
-const mailer = require('./lib/mailer');
+const db = require('../lib/db');
+const sessions = require('../lib/sessions');
+const otp = require('../lib/otp');
+const mailer = require('../lib/mailer');
 
 const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -553,7 +553,7 @@ function serveStatic(req, res, pathname) {
 // server
 // ---------------------------------------------------------------------------
 
-const server = http.createServer(async (req, res) => {
+async function handleRequest(req, res) {
   const parsed = url.parse(req.url, true);
   const pathname = parsed.pathname;
 
@@ -580,7 +580,15 @@ const server = http.createServer(async (req, res) => {
   }
 
   serveStatic(req, res, pathname);
-});
+}
 
-});
-module.exports = server;
+const server = http.createServer(handleRequest);
+
+if (require.main === module) {
+  server.listen(PORT, () => {
+    db.load();
+    console.log(`Scene+ Partner & Agent Offers Portal running at http://localhost:${PORT}`);
+  });
+}
+
+module.exports = handleRequest;
